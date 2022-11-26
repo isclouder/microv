@@ -8,7 +8,7 @@
 # 作用:
 
 用以KVM虚拟化和计算机体系结构的学习例子;  
-理解如何引导linux系统；理解X86的实模式和保护模式；理解KVM虚拟化的基本原理。  
+理解bios如何引导linux系统；理解X86的实模式和保护模式；理解KVM虚拟化的基本原理。  
 
 # 参考:
 
@@ -17,6 +17,9 @@ firecracker-microvm stratovirt
 # 编译：  
 
 ```shell
+    编译代码、内核、initrd：
+    cd microv; make all  
+    只编译代码：
     cd microv; make
 ```
 
@@ -29,4 +32,4 @@ firecracker-microvm stratovirt
 ## END.如有交流请联系作者
 
 email:isclouder@163.com  
-微信:kvmvirt
+微信:kvmvirt  
