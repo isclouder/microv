@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <getopt.h>
 
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -38,8 +39,8 @@ typedef struct VCPUState {
 
 struct KVMState *kvm_state;
 
-const char VMLINUX_FILE[] = "/root/img/vmlinux.bin";
-const char INITRD_FILE[] = "/root/img/initrd.img";
+char *kernel_file=NULL;
+char *initrd_file=NULL;
 
 static void init_vcpu(struct VCPUState *vcpu)
 {
@@ -149,7 +150,7 @@ static void init_linux_boot() {
     setup_pagetable();
     setup_mptable(VCPU_COUNT);
     setup_cmdline();
-    setup_boot_params(VMLINUX_FILE, INITRD_FILE);
+    setup_boot_params(kernel_file, initrd_file);
     setup_gdt();
     setup_idt();
 }
@@ -178,11 +179,49 @@ static void create_base_dev()
     }
 }
 
+#define print_option(args, help_msg) printf("    %s    %s", args, help_msg)
+static void usage(const char *execpath)
+{
+    printf("\nusage: %s [args]\n\n", execpath);
+    printf("example: %s -k ./out/vmlinux.bin -i ./out/initrd.img\n\n", execpath);
+    printf("args:\n");
+    print_option("-k, --kernel kernel_file", "input the kernel file\n");
+    print_option("-i, --initrd initrd_file", "input the initrd file\n");
+    print_option("-h, --help", "Print help\n");
+}
+
 int main(int argc, char **argv) {
     int ret;
     kvm_state = malloc(sizeof(struct KVMState));
     struct VCPUState *vcpu = malloc(sizeof(struct VCPUState));
     pthread_t vcpu_thread;
+
+    int c;
+    int option_index = 0;
+    struct option opts[] = {
+        {"kernel", 1, NULL, 'k'},
+        {"initrd", 1, NULL, 'i'},
+        {"help", 0, NULL, 'h'},
+    };
+    while ((c = getopt_long(argc, argv, "k:i:h", opts, &option_index)) != -1) {
+        switch (c) {
+        case 'k':
+            kernel_file = optarg;
+            break;
+        case 'i':
+            initrd_file = optarg;
+            break;
+        case 'h':
+            usage(argv[0]);
+            exit(1);
+        default:
+            break;
+        }
+    }
+    if(!kernel_file || !initrd_file) {
+        fprintf(stderr, "Must input kernel and initrd file\n");
+        return -1;
+    }
 
     //open kvm device
     kvm_state->fd = open("/dev/kvm", O_RDWR);
