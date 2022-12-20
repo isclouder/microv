@@ -12,7 +12,7 @@
 
 uint64_t InitrdSize;
 uint64_t InitrdAddr;
-static const char CMDLINE[] = "console=ttyS0 panic=1 reboot=k root=/dev/ram rdinit=/bin/sh";
+static const char CMDLINE[] = "console=ttyS0 pci=conf1 panic=1 reboot=k root=/dev/ram rdinit=/bin/sh";
 
 static int file_len(FILE *fp)
 {

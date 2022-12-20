@@ -18,7 +18,11 @@
 #include "bootparams.h"
 #include "gdt.h"
 #include "vcpu.h"
+#include "ioeventfd.h"
+#include "iobus.h"
 #include "serial.h"
+#include "pci.h"
+#include "virtio-blk.h"
 
 #define KVM_API_VERSION 12
 #define VCPU_ID 0
@@ -28,8 +32,10 @@
     do { fprintf(stderr, fmt, ## __VA_ARGS__); } while (0)
 
 struct KVMState {
-   int fd;
-   int vmfd;
+    int fd;
+    int vmfd;
+    struct diskimg diskimg;
+    struct virtio_blk_dev virtio_blk_dev;
 };
 
 typedef struct VCPUState {
@@ -41,6 +47,7 @@ struct KVMState *kvm_state;
 
 char *kernel_file=NULL;
 char *initrd_file=NULL;
+char *disk_file = NULL;
 
 static void init_vcpu(struct VCPUState *vcpu)
 {
@@ -94,14 +101,11 @@ static int vcpu_exec(struct VCPUState *vcpu)
 	    DPRINTF("hlt\n");
             return 0;
         case KVM_EXIT_IO:
-            if(MMIO_SERIAL_START<=run->io.port && \
-               run->io.port<MMIO_SERIAL_START+MMIO_SERIAL_SIZE){
-                handle_serial_io(run);
-            }
+            iobus_handle_pio(run);
             ret = 0;
             break;
         case KVM_EXIT_MMIO:
-            DPRINTF("handle_mmio\n");
+            iobus_handle_mmio(run);
             ret = 0;
             break;
         case KVM_EXIT_IRQ_WINDOW_OPEN:
@@ -183,10 +187,11 @@ static void create_base_dev()
 static void usage(const char *execpath)
 {
     printf("\nusage: %s [args]\n\n", execpath);
-    printf("example: %s -k ./out/vmlinux.bin -i ./out/initrd.img\n\n", execpath);
+    printf("example: %s -k ./out/vmlinux.bin -i ./out/initrd.img -d ./out/disk.img \n\n", execpath);
     printf("args:\n");
     print_option("-k, --kernel kernel_file", "input the kernel file\n");
     print_option("-i, --initrd initrd_file", "input the initrd file\n");
+    print_option("-d, --disk disk_file", "input the disk file\n");
     print_option("-h, --help", "Print help\n");
 }
 
@@ -199,17 +204,21 @@ int main(int argc, char **argv) {
     int c;
     int option_index = 0;
     struct option opts[] = {
-        {"kernel", 1, NULL, 'k'},
-        {"initrd", 1, NULL, 'i'},
-        {"help", 0, NULL, 'h'},
+        {"kernel", required_argument, NULL, 'k'},
+        {"initrd", required_argument, NULL, 'i'},
+        {"disk", required_argument, NULL, 'd'},
+        {"help", no_argument, NULL, 'h'},
     };
-    while ((c = getopt_long(argc, argv, "k:i:h", opts, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "k:i:d:h", opts, &option_index)) != -1) {
         switch (c) {
         case 'k':
             kernel_file = optarg;
             break;
         case 'i':
             initrd_file = optarg;
+            break;
+        case 'd':
+            disk_file = optarg;
             break;
         case 'h':
             usage(argv[0]);
@@ -256,11 +265,30 @@ int main(int argc, char **argv) {
     //init vcpu
     init_vcpu(vcpu);
 
+    //run linux boot
+    init_linux_boot();
+
+    //ioevent
+    ioeventfd_init(kvm_state->vmfd);
+
+    //ioregion
+    iobus_init();
+    pcibus_init();
+
     //create serial dev
     create_serial_dev(kvm_state->vmfd);
 
-    //run bios
-    init_linux_boot();
+    //virio pci
+    if(disk_file) {
+        if (diskimg_init(&kvm_state->diskimg, disk_file) < 0) {
+            fprintf(stderr, "load diskimg failed\n");
+            return -1;
+        }
+            fprintf(stderr, "load diskimg done\n");
+        virtio_blk_init_pci(kvm_state->vmfd,
+                            &kvm_state->virtio_blk_dev,
+                            &kvm_state->diskimg);
+    }
 
     //vcpu run
     setup_vcpu(kvm_state->fd, vcpu->vcpu_fd, VCPU_COUNT, VCPU_ID);

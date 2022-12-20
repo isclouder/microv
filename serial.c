@@ -38,6 +38,7 @@ Base Address	DLAB	Read/Write	Abr.	Register Name
 #include <pthread.h>
 
 #include "global.h"
+#include "iobus.h"
 #include "serial.h"
 
 #define MMIO_SERIAL_IRQ		4
@@ -103,6 +104,9 @@ struct Serial {
     .div = 0x0c,
     .thr_pending = 0,
 };
+
+extern struct bus pio_bus;
+struct region io_region;
 
 static void fifo_clear()
 {
@@ -213,7 +217,7 @@ static void *serial_thread_fn(void *arg)
 static uint8_t read_serial_reg(uint64_t port)
 {
     uint8_t ret;
-    uint64_t reg = port - MMIO_SERIAL_START;
+    uint64_t reg = port;
 
     switch (reg){
     case 0:
@@ -268,7 +272,7 @@ static uint8_t read_serial_reg(uint64_t port)
 
 static void write_serial_reg(uint64_t port, uint8_t data)
 {
-    uint64_t reg = port - MMIO_SERIAL_START;
+    uint64_t reg = port;
 
     switch (reg){
     case 0:
@@ -316,12 +320,12 @@ static void write_serial_reg(uint64_t port, uint8_t data)
 
 }
 
-void handle_serial_io(struct kvm_run *kvm_run)
+static void serial_handle_io(uint64_t port, uint8_t size, void *data, uint8_t is_write, void *owner)
 {
-    if (kvm_run->io.direction == KVM_EXIT_IO_IN) {
-        *(uint8_t *)((uint8_t *)kvm_run + kvm_run->io.data_offset) = read_serial_reg(kvm_run->io.port);
+    if(is_write) {
+        write_serial_reg(port, *(uint8_t *)(data));
     } else {
-        write_serial_reg(kvm_run->io.port, *(uint8_t *)((uint8_t *)kvm_run + kvm_run->io.data_offset));
+        *(uint8_t *)(data) = read_serial_reg(port);
     }
 }
 
@@ -340,6 +344,9 @@ void create_serial_dev(int vmfd)
         fprintf(stderr, "register serial irq fd failed\n");
     }
 
+    region_init(&io_region, IO_SERIAL_START, IO_SERIAL_SIZE, NULL, serial_handle_io);
+    iobus_register_region(&pio_bus, &io_region);
+
     pthread_t serial_thread;
 
     if (pthread_create(&(serial_thread), (const pthread_attr_t *)NULL,
@@ -347,5 +354,3 @@ void create_serial_dev(int vmfd)
         fprintf(stderr, "can not create serial thread");
     }
 }
-
-

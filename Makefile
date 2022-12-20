@@ -1,5 +1,20 @@
 TARGET = microv
-OBJECT = main.o memory.o mptable.o bootparams.o gdt.o vcpu.o serial.o string.o
+
+OBJECT  = main.o
+OBJECT += memory.o
+OBJECT += mptable.o
+OBJECT += bootparams.o
+OBJECT += gdt.o
+OBJECT += vcpu.o
+OBJECT += serial.o
+OBJECT += string.o
+OBJECT += iobus.o
+OBJECT += pci.o
+OBJECT += virtio-pci.o
+OBJECT += virtio-blk.o
+OBJECT += virtqueue.o
+OBJECT += ioeventfd.o
+
 CC = gcc
 CXXFLAG = -Wno-int-to-pointer-cast
 LDFLAG = -lpthread
@@ -17,7 +32,7 @@ BUSYBOX_SRC_URL = https://busybox.net/downloads/busybox-${BUSYBOX_VER}.tar.bz2
 BUSYBOX_SRC = $(OUT)/busybox-${BUSYBOX_VER}
 
 $(TARGET):$(OBJECT)
-	$(CC) $(CXXFLAG) main.c memory.c mptable.c bootparams.c gdt.c vcpu.c serial.c string.c -o $@ $(LDFLAG)
+	$(CC) $(CXXFLAG) $^ -o $@ $(LDFLAG)
 
 vmlinux.bin:
 	mkdir -p ${OUT}
@@ -35,7 +50,12 @@ initrd.img:
 	cd ${BUSYBOX_SRC} ; $(MAKE) install
 	cd ${BUSYBOX_SRC}/_install ; find . | cpio -o --format=newc > $(OUT)/$@
 
-all:$(TARGET) vmlinux.bin initrd.img
+disk.img:
+	mkdir -p ${OUT}
+	dd if=/dev/zero of=$(OUT)/$@ bs=4k count=1024
+	mkfs.ext4 -F $(OUT)/$@
+
+all:$(TARGET) vmlinux.bin initrd.img disk.img
 
 clean:
 	rm -rf *.o out microv

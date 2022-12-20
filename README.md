@@ -4,6 +4,8 @@
 实现了一个能够引导linux操作系统的linux boot规范，或者说实现了无bios引导linux系统。  
 实现了KVM虚拟化的最基础CPU、内存、IO陷入陷出处理。  
 实现了一个串口设备，用以和操作系统交互。  
+实现了PCI总线。  
+实现了基于PCI总线的virtio-blk。  
 
 # 作用:
 
@@ -26,7 +28,7 @@ firecracker-microvm stratovirt
 # 运行:  
 
 ```shell
-    ./microv -k ./out/vmlinux.bin -i ./out/initrd.img
+    ./microv -k ./out/vmlinux.bin -i ./out/initrd.img -d ./out/disk.img
 ```
 
 ## END.如有交流请联系作者
